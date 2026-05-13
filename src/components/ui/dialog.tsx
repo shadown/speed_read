@@ -2,31 +2,40 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { X } from 'lucide-react';
 
-interface DialogProps {
+export function Dialog({
+  open,
+  onOpenChange,
+  children,
+}: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
-}
-
-export function Dialog({ open, onOpenChange, children }: DialogProps) {
+}) {
   React.useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onOpenChange(false);
+    };
+    document.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handler);
       document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
+    };
+  }, [open, onOpenChange]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-scale-in"
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg border bg-background p-6 shadow-lg">
+      <div
+        className="relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto glass rounded-xl shadow-2xl p-6 animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
         {children}
       </div>
     </div>
@@ -34,27 +43,26 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 }
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('mb-4', className)} {...props} />;
+  return <div className={cn('mb-5 space-y-1', className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn('text-lg font-semibold leading-none tracking-tight', className)} {...props} />;
+  return <h2 className={cn('text-lg font-semibold leading-tight tracking-tight', className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('text-sm text-muted-foreground mt-1', className)} {...props} />;
+  return <p className={cn('text-sm text-muted-foreground', className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex justify-end gap-2 mt-6', className)} {...props} />;
+  return <div className={cn('flex items-center justify-end gap-2 mt-6 pt-4 border-t', className)} {...props} />;
 }
 
-export function DialogClose({ onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function DialogCloseButton({ onClick }: { onClick?: () => void }) {
   return (
     <button
-      className="absolute top-4 right-4 rounded-sm opacity-70 hover:opacity-100"
       onClick={onClick}
-      {...props}
+      className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
     >
       <X className="h-4 w-4" />
       <span className="sr-only">Close</span>

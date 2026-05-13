@@ -1,126 +1,143 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useDocumentStore } from '@/store/documentStore';
 import { useReaderStore } from '@/store/readerStore';
 import { ChunkingService } from '@/services/ChunkingService';
 
 /**
- * RSVPDisplay — Rapid Serial Visual Presentation display.
- * Flashes chunks of text one at a time at the configured speed.
- * Uses requestAnimationFrame for precise timing.
+ * RSVPDisplay — Rapid Serial Visual Presentation with Optimal Recognition Point.
+ *
+ * Flashes text chunks one at a time at the configured WPM, with:
+ * - A faint ORP (Optimal Recognition Point) crosshair for eye anchoring
+ * - Adaptive font sizing based on chunk length
+ * - Smooth opacity transitions via CSS animation
+ * - Word count indicator
+ * - Chunk position dots for spatial awareness
  */
 export function RSVPDisplay() {
-  const chunks = useDocumentStore(s => s.chunks);
-  const currentIndex = useReaderStore(s => s.currentIndex);
-  const isPlaying = useReaderStore(s => s.isPlaying);
-  const wpm = useReaderStore(s => s.wpm);
-  const advance = useReaderStore(s => s.advance);
-  const pause = useReaderStore(s => s.pause);
+  const chunks = useDocumentStore((s) => s.chunks);
+  const currentIndex = useReaderStore((s) => s.currentIndex);
+  const isPlaying = useReaderStore((s) => s.isPlaying);
+  const wpm = useReaderStore((s) => s.wpm);
+  const advance = useReaderStore((s) => s.advance);
+  const pause = useReaderStore((s) => s.pause);
 
-  const timerRef = useRef<number | null>(null);
-  const [visible, setVisible] = useState(true);
-  const prevIndexRef = useRef(currentIndex);
+  const animRef = useRef<number | null>(null);
+  const startRef = useRef<number>(0);
+  const indexRef = useRef(currentIndex);
 
-  const currentChunk = chunks[currentIndex];
-  const chunkDuration = currentChunk
-    ? ChunkingService.getChunkDuration(currentChunk, wpm)
-    : 250;
+  // Sync index ref for animation callback
+  indexRef.current = currentIndex;
 
-  // Reset visibility when chunk changes
+  const chunk = chunks[currentIndex];
+  const duration = chunk ? ChunkingService.getChunkDuration(chunk, wpm) : 250;
+
+  // RSVP timing engine — uses requestAnimationFrame for smooth display
   useEffect(() => {
-    if (prevIndexRef.current !== currentIndex) {
-      setVisible(true);
-      prevIndexRef.current = currentIndex;
-    }
-  }, [currentIndex]);
+    if (!isPlaying || currentIndex >= chunks.length) return;
 
-  // Timer for auto-advance
-  useEffect(() => {
-    if (isPlaying && currentIndex < chunks.length) {
-      timerRef.current = window.setTimeout(() => {
+    startRef.current = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startRef.current;
+      if (elapsed >= duration) {
         advance();
-      }, chunkDuration);
-    }
-
-    return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
+        return;
       }
+      animRef.current = requestAnimationFrame(tick);
     };
-  }, [isPlaying, currentIndex, chunks.length, chunkDuration, advance]);
 
-  // Pause when we reach the end
+    animRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (animRef.current !== null) cancelAnimationFrame(animRef.current);
+    };
+  }, [isPlaying, currentIndex, chunks.length, duration, advance]);
+
+  // Pause at end
   useEffect(() => {
-    if (currentIndex >= chunks.length) {
+    if (currentIndex >= chunks.length && chunks.length > 0) {
       pause();
     }
   }, [currentIndex, chunks.length, pause]);
 
-  if (!currentChunk) {
+  // Empty state
+  if (!chunk) {
     return (
-      <div className="text-center text-muted-foreground">
-        <p>No content to display</p>
+      <div className="flex flex-col items-center gap-3 text-muted-foreground/50">
+        <div className="w-12 h-12 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center text-lg">
+          ∅
+        </div>
+        <p className="text-sm">No content loaded</p>
       </div>
     );
   }
 
-  // Calculate font size based on chunk length
-  const fontSize = currentChunk.text.length > 30 ? 'text-xl'
-    : currentChunk.text.length > 15 ? 'text-2xl'
-    : currentChunk.text.length > 8 ? 'text-3xl'
-    : 'text-4xl';
+  // Adaptive font size
+  const textLen = chunk.text.length;
+  const fontSize =
+    textLen > 35 ? 'text-xl' : textLen > 20 ? 'text-2xl' : textLen > 10 ? 'text-3xl' : 'text-4xl';
+  const lineHeight = textLen > 35 ? 'leading-relaxed' : 'leading-tight';
 
   return (
-    <div className="flex flex-col items-center gap-8">
-      {/* Focus point indicator */}
-      <div className="relative">
-        {/* Center fixation crosshair */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="relative">
-            <div className="absolute w-[2px] h-6 bg-primary/20 left-1/2 -translate-x-1/2 -top-3" />
-            <div className="absolute w-6 h-[2px] bg-primary/20 top-0 -translate-y-1/2 left-1/2 -translate-x-1/2" />
-          </div>
-        </div>
+    <div className="flex flex-col items-center gap-6 select-none">
+      {/* Visual container */}
+      <div className="relative flex items-center justify-center">
+        {/* ORP crosshair — the key to speed reading eye anchoring */}
+        <div className="orp-marker" aria-hidden="true" />
 
-        {/* Chunk text */}
+        {/* Chunk */}
         <div
+          key={currentIndex}
           className={`
-            ${fontSize} font-bold leading-tight text-center
-            min-w-[200px] max-w-[600px] min-h-[80px]
-            flex items-center justify-center px-8 py-4
-            rounded-lg select-none
-            transition-opacity duration-75
-            ${visible ? 'opacity-100' : 'opacity-0'}
+            ${fontSize} ${lineHeight} font-semibold tracking-wide text-center
+            min-w-[240px] max-w-[650px] min-h-[100px]
+            flex items-center justify-center px-10 py-6
+            rounded-xl animate-rsvp
           `}
-          style={{ fontFeatureSettings: '"kern"', letterSpacing: '0.02em' }}
+          style={{ '--chunk-duration': `${duration}ms` } as React.CSSProperties}
+          aria-live="polite"
+          role="status"
         >
-          <span className="relative">
-            {currentChunk.text}
-            {/* Optimal recognition point — center character slightly highlighted */}
-          </span>
+          {chunk.text}
         </div>
       </div>
 
-      {/* Chunk position indicator */}
-      <div className="flex items-center gap-1.5">
-        {Array.from({ length: Math.min(20, chunks.length) }, (_, i) => {
-          const isCurrent = i === (currentIndex % 20);
-          const isPast = i < (currentIndex % 20);
+      {/* Position indicator dots */}
+      <div className="flex items-center gap-1" aria-hidden="true">
+        {Array.from({ length: Math.min(24, chunks.length) }, (_, i) => {
+          const rel = i - (currentIndex % 24);
+          const dist = Math.abs(rel);
+          const isCurrent = rel === 0;
           return (
             <div
               key={i}
-              className={`w-2 h-2 rounded-full transition-all ${
-                isCurrent ? 'bg-primary scale-125 w-3' :
-                isPast ? 'bg-primary/30' : 'bg-secondary'
-              }`}
+              className="rounded-full transition-all duration-150"
+              style={{
+                width: isCurrent ? 10 : Math.max(3, 8 - dist * 0.5),
+                height: isCurrent ? 10 : Math.max(3, 8 - dist * 0.5),
+                backgroundColor: isCurrent
+                  ? 'hsl(var(--primary))'
+                  : rel < 0
+                    ? 'hsl(var(--muted-foreground) / 0.2)'
+                    : 'hsl(var(--muted-foreground) / 0.08)',
+                transform: isCurrent ? 'scale(1.1)' : 'scale(1)',
+              }}
             />
           );
         })}
       </div>
 
-      {/* Word count indicator */}
-      <div className="text-xs text-muted-foreground font-mono">
-        {currentChunk.wordCount} words
+      {/* Meta */}
+      <div className="flex items-center gap-4 text-xs text-muted-foreground/60 font-mono tabular-nums">
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+          {chunk.wordCount}w
+        </span>
+        <span className="opacity-40">·</span>
+        <span>{Math.round(duration)}ms</span>
+        <span className="opacity-40">·</span>
+        <span>
+          {Math.round(wpm * (chunk.wordCount / 3))} eff. WPM
+        </span>
       </div>
     </div>
   );

@@ -1,78 +1,71 @@
 import { useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { useDocumentStore } from '@/store/documentStore';
 import { useReaderStore } from '@/store/readerStore';
+import { cn } from '@/lib/utils';
 import { Upload, FileText, FileDiff, File as FileIcon } from 'lucide-react';
 
-const ACCEPTED_TYPES = ['.md', '.txt', '.pdf', '.diff', '.patch'];
+const ACCEPTED = '.md,.txt,.pdf,.diff,.patch';
 
 export function FileUpload() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const setFile = useDocumentStore(s => s.setFile);
-  const setMode = useReaderStore(s => s.setMode);
+  const [dragging, setDragging] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const setDocFile = useDocumentStore((s) => s.setFile);
+  const setMode = useReaderStore((s) => s.setMode);
 
-  const handleFile = async (file: File) => {
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    if (!ACCEPTED_TYPES.includes(ext)) {
-      alert(`Unsupported file type: ${ext}. Accepted: ${ACCEPTED_TYPES.join(', ')}`);
-      return;
-    }
-    setUploadedFile(file);
-    await setFile(file);
+  const handleFile = async (f: File) => {
+    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+    if (!ACCEPTED.includes(ext)) return;
+    setFile(f);
+    await setDocFile(f);
     setMode('skim');
   };
+
+  const FileIconComponent = file?.name.endsWith('.diff') || file?.name.endsWith('.patch')
+    ? FileDiff : file?.name.endsWith('.pdf') ? FileIcon : FileText;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium">Upload a file</label>
-        <span className="text-xs text-muted-foreground">
-          .md .txt .pdf .diff .patch
-        </span>
+        <label className="text-sm font-medium">Upload file</label>
+        <span className="text-[11px] text-muted-foreground/60">.md .txt .pdf .diff .patch</span>
       </div>
 
       <div
-        className={`relative flex flex-col items-center justify-center h-36 rounded-md border-2 border-dashed transition-colors cursor-pointer
-          ${isDragging ? 'border-primary bg-primary/5' : 'border-input hover:border-muted-foreground'}`}
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragging(false);
-          const file = e.dataTransfer.files[0];
-          if (file) handleFile(file);
-        }}
+        className={cn(
+          'relative flex flex-col items-center justify-center h-40 rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer',
+          dragging
+            ? 'border-primary bg-primary/5 scale-[1.01]'
+            : 'border-input hover:border-muted-foreground/40 hover:bg-accent/20',
+        )}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
         onClick={() => inputRef.current?.click()}
       >
         <input
           ref={inputRef}
           type="file"
-          accept={ACCEPTED_TYPES.join(',')}
+          accept={ACCEPTED}
           className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFile(file);
-          }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
         />
-        {uploadedFile ? (
-          <div className="flex items-center gap-2 text-sm">
-            {uploadedFile.name.endsWith('.diff') || uploadedFile.name.endsWith('.patch')
-              ? <FileDiff className="h-5 w-5 text-primary" />
-              : uploadedFile.name.endsWith('.pdf')
-                ? <FileIcon className="h-5 w-5 text-primary" />
-                : <FileText className="h-5 w-5 text-primary" />
-            }
-            <span className="font-medium">{uploadedFile.name}</span>
-            <span className="text-muted-foreground">
-              ({(uploadedFile.size / 1024).toFixed(1)} KB)
-            </span>
+
+        {file ? (
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <FileIconComponent className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-sm font-medium">{file.name}</div>
+            <div className="text-[11px] text-muted-foreground/60 tabular-nums">
+              {(file.size / 1024).toFixed(1)} KB
+            </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-1 text-muted-foreground">
-            <Upload className="h-6 w-6" />
-            <span className="text-sm">Drop a file here or click to browse</span>
+          <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
+            <Upload className="h-7 w-7" />
+            <span className="text-sm">Drop a file here, or click to browse</span>
+            <span className="text-[10px]">Markdown, text, PDF, or unified diffs</span>
           </div>
         )}
       </div>

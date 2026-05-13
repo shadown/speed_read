@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Dialog, DialogHeader, DialogTitle, DialogDescription,
-  DialogFooter, DialogClose,
+  DialogFooter, DialogCloseButton,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectItem } from '@/components/ui/select';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAiStore } from '@/store/aiStore';
+import { cn } from '@/lib/utils';
 import { Loader2, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import type { DeepSeekModel } from '@/types';
 
@@ -27,18 +28,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     resetToDefaults,
   } = useSettingsStore();
 
-  const testApiKey = useAiStore(s => s.testApiKey);
+  const testApiKey = useAiStore((s) => s.testApiKey);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [showKey, setShowKey] = useState(false);
 
-  const handleTestConnection = async () => {
+  const handleTest = async () => {
     if (!apiKey) return;
     setTestStatus('testing');
     const ok = await testApiKey(apiKey);
     setTestStatus(ok ? 'success' : 'error');
-    setTimeout(() => {
-      if (testStatus !== 'testing') setTestStatus('idle');
-    }, 3000);
+    setTimeout(() => setTestStatus('idle'), 3000);
   };
 
   const handleReset = () => {
@@ -48,20 +47,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogCloseButton onClick={() => onOpenChange(false)} />
       <DialogHeader>
         <DialogTitle>Settings</DialogTitle>
         <DialogDescription>
-          Configure your AI provider, reading preferences, and appearance.
+          Configure AI provider, reading preferences, and appearance.
         </DialogDescription>
       </DialogHeader>
-      <DialogClose onClick={() => onOpenChange(false)} />
 
       <div className="space-y-6">
-        {/* API Key Section */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">AI Provider — DeepSeek API</Label>
-          <p className="text-xs text-muted-foreground">
-            Your API key is stored locally in your browser and never sent anywhere except to api.deepseek.com.
+        {/* API Key */}
+        <section className="space-y-3">
+          <Label className="text-sm font-medium">AI Provider — DeepSeek</Label>
+          <p className="text-xs text-muted-foreground/70 leading-relaxed">
+            Your API key is stored locally in your browser. It is only sent to{' '}
+            <code className="text-[10px] font-mono bg-muted px-1 rounded">api.deepseek.com</code>.
           </p>
 
           <div className="flex gap-2">
@@ -74,8 +74,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 className="pr-8 font-mono text-xs"
               />
               <button
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                type="button"
                 onClick={() => setShowKey(!showKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               </button>
@@ -83,59 +84,61 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleTestConnection}
+              onClick={handleTest}
               disabled={!apiKey || testStatus === 'testing'}
-              className="gap-1.5"
+              className={cn('gap-1.5 min-w-[90px]', {
+                'border-green-500/30 text-green-600 dark:text-green-400': testStatus === 'success',
+                'border-red-500/30 text-red-600 dark:text-red-400': testStatus === 'error',
+              })}
             >
               {testStatus === 'testing' && <Loader2 className="h-3 w-3 animate-spin" />}
-              {testStatus === 'success' && <CheckCircle2 className="h-3 w-3 text-green-500" />}
-              {testStatus === 'error' && <AlertCircle className="h-3 w-3 text-red-500" />}
+              {testStatus === 'success' && <CheckCircle2 className="h-3 w-3" />}
+              {testStatus === 'error' && <AlertCircle className="h-3 w-3" />}
               {testStatus === 'idle' && 'Test'}
-              {testStatus === 'testing' ? 'Testing...' :
-               testStatus === 'success' ? 'Connected' :
-               testStatus === 'error' ? 'Failed' : 'Connection'}
+              {testStatus === 'testing'
+                ? '…'
+                : testStatus === 'success'
+                  ? 'OK'
+                  : testStatus === 'error'
+                    ? 'Failed'
+                    : 'Connect'}
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Label className="text-xs">Model</Label>
+          <div className="flex items-center gap-3">
+            <Label className="text-xs text-muted-foreground shrink-0">Model</Label>
             <Select
               value={model}
               onValueChange={(v) => setModel(v as DeepSeekModel)}
               className="flex-1"
             >
-              <SelectItem value="deepseek-chat">DeepSeek-V3 (Chat, fast)</SelectItem>
-              <SelectItem value="deepseek-reasoner">DeepSeek-R1 (Reasoner, deep)</SelectItem>
+              <SelectItem value="deepseek-chat">DeepSeek-V3 (fast)</SelectItem>
+              <SelectItem value="deepseek-reasoner">DeepSeek-R1 (deep analysis)</SelectItem>
             </Select>
           </div>
-        </div>
+        </section>
 
-        <hr className="border-border" />
+        <hr className="border-border/50" />
 
-        {/* Reading Preferences */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Reading Preferences</Label>
-
+        {/* Reading preferences */}
+        <section className="space-y-3">
+          <Label className="text-sm font-medium">Reading</Label>
           <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-xs">Comprehension Checks</Label>
-              <p className="text-[10px] text-muted-foreground">
+            <div className="space-y-0.5">
+              <Label className="text-xs">Comprehension checks</Label>
+              <p className="text-[10px] text-muted-foreground/60">
                 Pause periodically to confirm understanding
               </p>
             </div>
-            <Switch
-              checked={showComprehensionChecks}
-              onCheckedChange={setShowComprehensionChecks}
-            />
+            <Switch checked={showComprehensionChecks} onCheckedChange={setShowComprehensionChecks} />
           </div>
-        </div>
+        </section>
 
-        <hr className="border-border" />
+        <hr className="border-border/50" />
 
         {/* Appearance */}
-        <div className="space-y-3">
+        <section className="space-y-3">
           <Label className="text-sm font-medium">Appearance</Label>
-
           <div className="flex items-center justify-between">
             <Label className="text-xs">Theme</Label>
             <div className="flex gap-1">
@@ -155,15 +158,15 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               </Button>
             </div>
           </div>
-        </div>
+        </section>
       </div>
 
       <DialogFooter>
-        <Button variant="outline" size="sm" onClick={handleReset}>
-          Reset to Defaults
+        <Button variant="ghost" size="sm" onClick={handleReset}>
+          Reset defaults
         </Button>
         <Button size="sm" onClick={() => onOpenChange(false)}>
-          Save & Close
+          Done
         </Button>
       </DialogFooter>
     </Dialog>

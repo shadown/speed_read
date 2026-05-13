@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import {
   ReactFlow,
   Background,
@@ -6,93 +6,101 @@ import {
   MiniMap,
   type Node,
   type Edge,
-  type NodeTypes,
   MarkerType,
   useNodesState,
   useEdgesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useDocumentStore } from '@/store/documentStore';
+import { cn } from '@/lib/utils';
 
 /**
- * ConceptMap — Interactive semantic relationship graph using React Flow.
- * Displays AI-generated topic clusters as nodes with relationship edges.
+ * ConceptMap — Interactive graph of AI-extracted topic relationships.
+ * Uses dagre-like auto-layout via React Flow's default layout.
+ * Falls back gracefully when no AI data is available.
  */
-export function ConceptMap() {
+export const ConceptMap = memo(function ConceptMap() {
   const clusters = useDocumentStore(s => s.aiClusters);
   const relations = useDocumentStore(s => s.aiClusterRelations);
 
-  const nodes: Node[] = useMemo(() => {
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
     if (!clusters || clusters.length === 0) {
-      // Placeholder node when no AI data
-      return [{
-        id: 'placeholder',
-        type: 'default',
-        position: { x: 150, y: 100 },
-        data: { label: 'Load content and run AI analysis\nto see concept relationships' },
-        style: {
-          background: 'hsl(var(--muted))',
-          color: 'hsl(var(--muted-foreground))',
-          border: '1px dashed hsl(var(--border))',
-          borderRadius: '8px',
-          padding: '20px',
-          fontSize: '12px',
-          textAlign: 'center',
-          whiteSpace: 'pre-line',
-          width: 200,
-        },
-      }];
+      return {
+        nodes: [
+          {
+            id: 'empty',
+            type: 'default',
+            position: { x: 0, y: 0 },
+            data: {
+              label: 'No concept data yet.\nRun AI analysis to see semantic relationships.',
+            },
+            style: emptyNodeStyle,
+          },
+        ],
+        edges: [],
+      };
     }
 
-    const spacing = 250;
+    const spacingX = 260;
+    const spacingY = 180;
     const cols = Math.min(3, clusters.length);
-    return clusters.map((c, i) => ({
+
+    const nodes: Node[] = clusters.map((c, i) => ({
       id: c.id,
       type: 'default',
       position: {
-        x: (i % cols) * spacing + 50,
-        y: Math.floor(i / cols) * spacing + 50,
+        x: (i % cols) * spacingX + 40,
+        y: Math.floor(i / cols) * spacingY + 40,
       },
       data: { label: c.label },
       style: {
-        background: c.color + '15',
+        background: c.color + '12',
         color: c.color,
-        border: `2px solid ${c.color}`,
+        border: `1.5px solid ${c.color}40`,
         borderRadius: '12px',
-        padding: '12px 16px',
-        fontSize: '13px',
+        padding: '10px 16px',
+        fontSize: '12px',
         fontWeight: 600,
         width: 200,
+        backdropFilter: 'blur(4px)',
+        boxShadow: `0 2px 8px ${c.color}10`,
       },
     }));
-  }, [clusters]);
 
-  const edges: Edge[] = useMemo(() => {
-    if (!relations || relations.length === 0) return [];
-
-    return relations.map((r, i) => ({
-      id: `edge-${i}`,
+    const edges: Edge[] = (relations || []).map((r, i) => ({
+      id: `e-${i}`,
       source: r.fromId,
       target: r.toId,
       label: r.label,
       type: 'smoothstep',
       animated: true,
-      markerEnd: { type: MarkerType.ArrowClosed },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
       style: {
         stroke: 'hsl(var(--muted-foreground))',
-        opacity: 0.6,
+        strokeWidth: 1.5,
+        opacity: 0.5,
       },
       labelStyle: {
-        fontSize: '10px',
+        fontSize: '9px',
         color: 'hsl(var(--muted-foreground))',
+        backgroundColor: 'hsl(var(--background))',
+        padding: '2px 6px',
+        borderRadius: '4px',
       },
     }));
-  }, [relations]);
+
+    return { nodes, edges };
+  }, [clusters, relations]);
+
+  const [nodes, , onNodesChange] = useNodesState(initialNodes);
+  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
 
   if (!clusters || clusters.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-        Run AI analysis to see concept clusters
+      <div className="flex items-center justify-center h-full">
+        <p className="text-xs text-muted-foreground/60 px-8 text-center leading-relaxed">
+          Load content and run AI analysis<br />to see concept relationships
+        </p>
       </div>
     );
   }
@@ -101,19 +109,45 @@ export function ConceptMap() {
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
       fitView
-      attributionPosition="bottom-left"
-      minZoom={0.5}
-      maxZoom={2}
+      minZoom={0.4}
+      maxZoom={2.5}
       proOptions={{ hideAttribution: true }}
+      className={cn(
+        '[&_.react-flow__background]:bg-transparent',
+        '[&_.react-flow__controls-button]:bg-background [&_.react-flow__controls-button]:border [&_.react-flow__controls-button]:border-border [&_.react-flow__controls-button]:hover:bg-accent',
+      )}
     >
-      <Background color="hsl(var(--muted))" gap={20} />
-      <Controls showInteractive={false} />
+      <Background color="hsl(var(--muted))" gap={24} size={1} />
+      <Controls
+        showInteractive={false}
+        className="[&_button]:w-7 [&_button]:h-7 [&_svg]:w-3.5 [&_svg]:h-3.5"
+      />
       <MiniMap
-        style={{ background: 'hsl(var(--background))' }}
+        style={{
+          background: 'hsl(var(--background))',
+          border: '1px solid hsl(var(--border))',
+          borderRadius: '8px',
+        }}
         nodeColor={(node) => node.style?.borderColor || 'hsl(var(--primary))'}
         maskColor="hsl(var(--background))"
+        className="[&_.react-flow__minimap-mask]:fill-background/60"
       />
     </ReactFlow>
   );
-}
+});
+
+const emptyNodeStyle: React.CSSProperties = {
+  background: 'transparent',
+  color: 'hsl(var(--muted-foreground))',
+  border: '1.5px dashed hsl(var(--border))',
+  borderRadius: '12px',
+  padding: '20px 24px',
+  fontSize: '12px',
+  textAlign: 'center',
+  whiteSpace: 'pre-line',
+  width: 260,
+  lineHeight: '1.6',
+};
