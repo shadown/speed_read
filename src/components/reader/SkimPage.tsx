@@ -26,6 +26,7 @@ export function SkimPage() {
   const startSkimAnalysis = useAiStore((s) => s.startSkimAnalysis);
   const setMode = useReaderStore((s) => s.setMode);
   const [conceptMapFullscreen, setConceptMapFullscreen] = useState(false);
+  const [heatmapFullscreen, setHeatmapFullscreen] = useState(false);
 
   const hasContent = rawText.length > 0;
   const hasAi = !!(aiSummary || aiHeatmap || aiClusters);
@@ -39,15 +40,18 @@ export function SkimPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasContent, apiKey, rawText]);
 
-  // Dismiss fullscreen on Escape
+  // Dismiss any fullscreen panel on Escape
   useEffect(() => {
-    if (!conceptMapFullscreen) return;
+    if (!conceptMapFullscreen && !heatmapFullscreen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setConceptMapFullscreen(false);
+      if (e.key === 'Escape') {
+        setConceptMapFullscreen(false);
+        setHeatmapFullscreen(false);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [conceptMapFullscreen]);
+  }, [conceptMapFullscreen, heatmapFullscreen]);
 
   // Input/Settings/Error states
   if (!hasContent) return <EmptyState onInput={() => setMode('input')} />;
@@ -115,12 +119,33 @@ export function SkimPage() {
 
       {/* Visualizations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
+        <Card className={cn(
+          heatmapFullscreen && 'fixed inset-0 z-50 rounded-none m-0 flex flex-col',
+        )}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Content Heatmap</CardTitle>
-            <CardDescription>Categories by paragraph</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium">Content Heatmap</CardTitle>
+                <CardDescription>Categories by paragraph</CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onClick={() => setHeatmapFullscreen(v => !v)}
+                title={heatmapFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              >
+                {heatmapFullscreen
+                  ? <Minimize2 className="h-4 w-4" />
+                  : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="max-h-[420px] overflow-y-auto scrollbar-none">
+          <CardContent className={cn(
+            heatmapFullscreen
+              ? 'flex-1 min-h-0 overflow-y-auto scrollbar-none'
+              : 'max-h-[420px] overflow-y-auto scrollbar-none',
+          )}>
             <Heatmap />
           </CardContent>
         </Card>
