@@ -30,12 +30,14 @@ export function SkimPage() {
   const hasContent = rawText.length > 0;
   const hasAi = !!(aiSummary || aiHeatmap || aiClusters);
 
-  // Auto-start
+  // Auto-start — re-runs whenever rawText changes so new input always triggers analysis
   useEffect(() => {
     if (hasContent && apiKey && !isProcessing && !hasAi) {
+      useAiStore.getState().reset(); // clear any prior error
       startSkimAnalysis(rawText);
     }
-  }, [hasContent, apiKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasContent, apiKey, rawText]);
 
   // Dismiss fullscreen on Escape
   useEffect(() => {

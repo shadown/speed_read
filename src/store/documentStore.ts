@@ -68,6 +68,13 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
         wordCount: countWords(normalized),
         lineCount: countLines(normalized),
       },
+      // Clear stale AI results so analysis re-runs on new content
+      aiSummary: null,
+      aiSummaryRaw: null,
+      aiHeatmap: null,
+      aiClusters: null,
+      aiClusterRelations: null,
+      aiConfidence: 0,
     });
     get().processText();
   },
@@ -80,6 +87,13 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       fileName: file.name,
       fileType: meta.type,
       fileMeta: meta,
+      // Clear stale AI results so analysis re-runs on new content
+      aiSummary: null,
+      aiSummaryRaw: null,
+      aiHeatmap: null,
+      aiClusters: null,
+      aiClusterRelations: null,
+      aiConfidence: 0,
     });
     get().processText();
   },
