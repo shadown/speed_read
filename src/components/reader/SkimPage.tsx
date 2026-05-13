@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDocumentStore } from '@/store/documentStore';
 import { useAiStore } from '@/store/aiStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -9,7 +9,7 @@ import { ConceptMap } from '@/components/visualizations/ConceptMap';
 import { Heatmap } from '@/components/visualizations/Heatmap';
 import { cn } from '@/lib/utils';
 import {
-  Sparkles, Loader2, AlertCircle, FileText, BrainCircuit,
+  Sparkles, Loader2, AlertCircle, FileText, BrainCircuit, Maximize2, Minimize2,
 } from 'lucide-react';
 
 export function SkimPage() {
@@ -25,6 +25,7 @@ export function SkimPage() {
   const error = useAiStore((s) => s.error);
   const startSkimAnalysis = useAiStore((s) => s.startSkimAnalysis);
   const setMode = useReaderStore((s) => s.setMode);
+  const [conceptMapFullscreen, setConceptMapFullscreen] = useState(false);
 
   const hasContent = rawText.length > 0;
   const hasAi = !!(aiSummary || aiHeatmap || aiClusters);
@@ -35,6 +36,16 @@ export function SkimPage() {
       startSkimAnalysis(rawText);
     }
   }, [hasContent, apiKey]);
+
+  // Dismiss fullscreen on Escape
+  useEffect(() => {
+    if (!conceptMapFullscreen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConceptMapFullscreen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [conceptMapFullscreen]);
 
   // Input/Settings/Error states
   if (!hasContent) return <EmptyState onInput={() => setMode('input')} />;
@@ -112,12 +123,31 @@ export function SkimPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={cn(
+          conceptMapFullscreen && 'fixed inset-0 z-50 rounded-none m-0 flex flex-col',
+        )}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Concept Map</CardTitle>
-            <CardDescription>Semantic topic relationships</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium">Concept Map</CardTitle>
+                <CardDescription>Semantic topic relationships</CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onClick={() => setConceptMapFullscreen(v => !v)}
+                title={conceptMapFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              >
+                {conceptMapFullscreen
+                  ? <Minimize2 className="h-4 w-4" />
+                  : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="h-[420px]">
+          <CardContent className={cn(
+            conceptMapFullscreen ? 'flex-1 min-h-0' : 'h-[420px]',
+          )}>
             <ConceptMap />
           </CardContent>
         </Card>
