@@ -1,0 +1,246 @@
+From: Example Developer <dev@example.com>
+Date: Mon, 13 May 2026 14:30:00 +0000
+Subject: [PATCH] feat: Add JWT authentication middleware
+
+---
+ src/middleware/auth.ts      | 78 ++++++++++++++++++++++++++++++++++++++++++++++
+ src/routes/api.ts           | 22 ++++++++++++--
+ src/services/userService.ts | 35 ++++++++++++++++++++++
+ src/tests/auth.test.ts      | 55 +++++++++++++++++++++++++++++++++++
+ package.json                |  1 +
+ 5 files changed, 189 insertions(+), 1 deletion(-)
+
+diff --git a/src/middleware/auth.ts b/src/middleware/auth.ts
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/src/middleware/auth.ts
+@@ -0,0 +1,78 @@
++import { Request, Response, NextFunction } from 'express';
++import jwt from 'jsonwebtoken';
++import { config } from '../config';
++
++export interface AuthPayload {
++  userId: string;
++  email: string;
++  role: 'admin' | 'user' | 'viewer';
++  iat: number;
++  exp: number;
++}
++
++/**
++ * JWT Authentication Middleware
++ * Validates Bearer token from Authorization header.
++ * Attaches decoded payload to request.auth.
++ */
++export function authenticate(req: Request, res: Response, next: NextFunction): void {
++  const authHeader = req.headers.authorization;
++
++  if (!authHeader) {
++    res.status(401).json({ error: 'Missing authorization header' });
++    return;
++  }
++
++  const parts = authHeader.split(' ');
++  if (parts.length !== 2 || parts[0] !== 'Bearer') {
++    res.status(401).json({ error: 'Invalid authorization format. Use: Bearer <token>' });
++    return;
++  }
++
++  const token = parts[1];
++
++  try {
++    const decoded = jwt.verify(token, config.jwtSecret) as AuthPayload;
++    
++    // Check if token has expired
++    if (decoded.exp < Date.now() / 1000) {
++      res.status(401).json({ error: 'Token has expired' });
++      return;
++    }
++
++    // Attach auth payload to request
++    (req as any).auth = decoded;
++    next();
++  } catch (err) {
++    if (err instanceof jwt.TokenExpiredError) {
++      res.status(401).json({ error: 'Token has expired' });
++    } else if (err instanceof jwt.JsonWebTokenError) {
++      res.status(401).json({ error: 'Invalid token' });
++    } else {
++      res.status(500).json({ error: 'Authentication failed' });
++    }
++  }
++}
++
++/**
++ * Role-based authorization middleware factory
++ * @param allowedRoles Roles that are permitted to access the route
++ */
++export function authorize(...allowedRoles: string[]) {
++  return (req: Request, res: Response, next: NextFunction): void => {
++    const auth = (req as any).auth as AuthPayload | undefined;
++
++    if (!auth) {
++      res.status(401).json({ error: 'Authentication required' });
++      return;
++    }
++
++    if (!allowedRoles.includes(auth.role)) {
++      res.status(403).json({ 
++        error: 'Insufficient permissions',
++        required: allowedRoles,
++        current: auth.role,
++      });
++      return;
++    }
++
++    next();
++  };
++}
+diff --git a/src/routes/api.ts b/src/routes/api.ts
+index 5566b77..d113456 100644
+--- a/src/routes/api.ts
++++ b/src/routes/api.ts
+@@ -1,4 +1,5 @@
+ import { Router } from 'express';
++import { authenticate, authorize } from '../middleware/auth';
+ import { getUsers, getUserById, createUser, deleteUser } from '../services/userService';
+ 
+ const router = Router();
+@@ -7,5 +8,22 @@ const router = Router();
+ router.get('/health', (req, res) => {
+   res.json({ status: 'ok', timestamp: Date.now() });
+ });
+-
+-router.get('/users', getUsers);
++
++// Public routes
++router.get('/users', authenticate, authorize('admin', 'user', 'viewer'), getUsers);
++router.get('/users/:id', authenticate, authorize('admin', 'user'), getUserById);
++
++// Admin-only routes
++router.post('/users', authenticate, authorize('admin'), createUser);
++router.delete('/users/:id', authenticate, authorize('admin'), deleteUser);
++
++// Current user info
++router.get('/me', authenticate, (req, res) => {
++  res.json({ user: (req as any).auth });
++});
++
++// Token refresh placeholder
++router.post('/refresh', authenticate, (req, res) => {
++  // TODO: Implement token refresh logic
++  res.json({ message: 'Token refresh endpoint' });
++});
+diff --git a/src/services/userService.ts b/src/services/userService.ts
+index 90210ab..ef56789 100644
+--- a/src/services/userService.ts
++++ b/src/services/userService.ts
+@@ -1,3 +1,5 @@
++import bcrypt from 'bcrypt';
++
+ interface User {
+   id: string;
+   email: string;
+@@ -6,12 +8,24 @@ interface User {
+   role: 'admin' | 'user' | 'viewer';
+ }
+ 
+-// In-memory user store (temporary)
+-const users: User[] = [
++// In-memory user store with hashed passwords
++const users: User[] = (() => {
++  const salt = bcrypt.genSaltSync(10);
++  return [
+   {
+     id: '1',
+     email: 'admin@example.com',
+-    password: 'admin123',
++    password: bcrypt.hashSync('admin123', salt),
++    name: 'Admin User',
++    role: 'admin' as const,
++  },
++  {
++    id: '2',
++    email: 'user@example.com',
++    password: bcrypt.hashSync('user123', salt),
++    name: 'Regular User',
++    role: 'user' as const,
++  },
+   ];
+ })();
+ 
+diff --git a/src/tests/auth.test.ts b/src/tests/auth.test.ts
+new file mode 100644
+index 0000000..b0b0b0b
+--- /dev/null
++++ b/src/tests/auth.test.ts
+@@ -0,0 +1,55 @@
++import { describe, it, expect, vi } from 'vitest';
++import { authenticate, authorize } from '../middleware/auth';
++import type { Request, Response, NextFunction } from 'express';
++
++function mockRequest(token?: string): Partial<Request> {
++  return {
++    headers: {
++      authorization: token ? `Bearer ${token}` : undefined,
++    },
++  };
++}
++
++function mockResponse(): Partial<Response> {
++  const res: any = {};
++  res.status = vi.fn().mockReturnValue(res);
++  res.json = vi.fn().mockReturnValue(res);
++  return res;
++}
++
++describe('authenticate middleware', () => {
++  it('should return 401 if no authorization header', () => {
++    const req = mockRequest() as Request;
++    const res = mockResponse() as Response;
++    const next = vi.fn() as NextFunction;
++
++    authenticate(req, res, next);
++
++    expect(res.status).toHaveBeenCalledWith(401);
++    expect(res.json).toHaveBeenCalledWith({ error: 'Missing authorization header' });
++    expect(next).not.toHaveBeenCalled();
++  });
++
++  it('should return 401 for invalid token format', () => {
++    const req = { headers: { authorization: 'InvalidFormat' } } as unknown as Request;
++    const res = mockResponse() as Response;
++    const next = vi.fn() as NextFunction;
++
++    authenticate(req, res, next);
++
++    expect(res.status).toHaveBeenCalledWith(401);
++    expect(next).not.toHaveBeenCalled();
++  });
++});
++
++describe('authorize middleware', () => {
++  it('should return 401 if no auth payload', () => {
++    const req = {} as Request;
++    const res = mockResponse() as Response;
++    const next = vi.fn() as NextFunction;
++
++    authorize('admin')(req, res, next);
++
++    expect(res.status).toHaveBeenCalledWith(401);
++    expect(next).not.toHaveBeenCalled();
++  });
++});
+diff --git a/package.json b/package.json
+index 4567cba..7890def 100644
+--- a/package.json
++++ b/package.json
+@@ -15,6 +15,7 @@
+   "dependencies": {
+     "express": "^4.18.2",
+     "jsonwebtoken": "^9.0.0",
++    "bcrypt": "^5.1.0",
+     "zod": "^3.22.0"
+   },
+   "devDependencies": {
