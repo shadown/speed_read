@@ -74,6 +74,13 @@ export class TextParser {
   static async extractPdfText(file: File): Promise<string> {
     try {
       const pdfjsLib = await import('pdfjs-dist');
+      // Configure worker before first use — Vite resolves the asset URL at build time.
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url,
+        ).href;
+      }
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const pages: string[] = [];

@@ -17,10 +17,20 @@ function extractJsonBlock(text: string): string | null {
   const m = text.match(fence);
   if (m && m[1]) return m[1].trim();
 
-  const first = text.indexOf('{');
-  const last = text.lastIndexOf('}');
-  if (first !== -1 && last !== -1 && last > first) {
-    return text.slice(first, last + 1);
+  // Try array first, then object — pick whichever starts earlier
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  const firstBracket = text.indexOf('[');
+  const lastBracket = text.lastIndexOf(']');
+
+  const hasObject = firstBrace !== -1 && lastBrace > firstBrace;
+  const hasArray = firstBracket !== -1 && lastBracket > firstBracket;
+
+  if (hasArray && (!hasObject || firstBracket < firstBrace)) {
+    return text.slice(firstBracket, lastBracket + 1);
+  }
+  if (hasObject) {
+    return text.slice(firstBrace, lastBrace + 1);
   }
 
   return null;
