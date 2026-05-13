@@ -8,6 +8,24 @@ import { CLUSTER_SYSTEM_PROMPT } from '@/prompts/cluster';
 import { DIFF_SYSTEM_PROMPT } from '@/prompts/diff';
 import type { HeatmapItem, AiCluster, ClusterRelation, ReaderMode } from '@/types';
 
+/**
+ * Try to extract a JSON block from AI responses.
+ * Supports fenced code blocks (```json) or extracts between first '{' and last '}'.
+ */
+function extractJsonBlock(text: string): string | null {
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i;
+  const m = text.match(fence);
+  if (m && m[1]) return m[1].trim();
+
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first !== -1 && last !== -1 && last > first) {
+    return text.slice(first, last + 1);
+  }
+
+  return null;
+}
+
 interface AiStore {
   isProcessing: boolean;
   streamingText: string;
@@ -104,12 +122,13 @@ export const useAiStore = create<AiStore>((set, get) => ({
           onComplete: (fullText) => {
             if (fullText) {
               try {
-                const parsed = JSON.parse(fullText);
+                const jsonText = extractJsonBlock(fullText) ?? fullText;
+                const parsed = JSON.parse(jsonText);
                 if (Array.isArray(parsed)) {
                   docStore.setAiHeatmap(parsed as HeatmapItem[]);
                 }
-              } catch {
-                console.warn('Failed to parse heatmap JSON response');
+              } catch (err) {
+                console.warn('Failed to parse heatmap JSON response', err, fullText.slice(0,200));
               }
             }
           },
@@ -136,13 +155,14 @@ export const useAiStore = create<AiStore>((set, get) => ({
           onComplete: (fullText) => {
             if (fullText) {
               try {
-                const parsed = JSON.parse(fullText);
+                const jsonText = extractJsonBlock(fullText) ?? fullText;
+                const parsed = JSON.parse(jsonText);
                 docStore.setAiClusters(
                   (parsed.clusters || []) as AiCluster[],
                   (parsed.relations || []) as ClusterRelation[],
                 );
-              } catch {
-                console.warn('Failed to parse cluster JSON response');
+              } catch (err) {
+                console.warn('Failed to parse cluster JSON response', err, fullText.slice(0,200));
               }
             }
           },
