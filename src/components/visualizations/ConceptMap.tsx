@@ -82,11 +82,14 @@ export const ConceptMap = memo(function ConceptMap() {
       },
       labelStyle: {
         fontSize: '9px',
-        color: 'hsl(var(--muted-foreground))',
-        backgroundColor: 'hsl(var(--background))',
-        padding: '2px 6px',
-        borderRadius: '4px',
+        fill: 'hsl(var(--foreground))',
       },
+      labelBgStyle: {
+        fill: 'hsl(var(--background))',
+        fillOpacity: 0.85,
+      },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 4,
     }));
 
     return { nodes, edges };
@@ -117,7 +120,7 @@ export const ConceptMap = memo(function ConceptMap() {
       proOptions={{ hideAttribution: true }}
       className={cn(
         '[&_.react-flow__background]:bg-transparent',
-        '[&_.react-flow__controls-button]:bg-background [&_.react-flow__controls-button]:border [&_.react-flow__controls-button]:border-border [&_.react-flow__controls-button]:hover:bg-accent',
+        '[&_.react-flow__controls-button]:bg-background [&_.react-flow__controls-button]:border [&_.react-flow__controls-button]:border-border [&_.react-flow__controls-button]:text-foreground [&_.react-flow__controls-button]:hover:bg-accent [&_.react-flow__controls-button_svg]:fill-current',
       )}
     >
       <Background color="hsl(var(--muted))" gap={24} size={1} />
